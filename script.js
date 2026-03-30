@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════
-   MAPA DE VISITAS PEC - VERSÃO FINAL COM SORT, CARDS E FILTROS
+   MAPA DE VISITAS PEC - VERSÃO DASHBOARD PRO (SORT + FILTROS + CARDS)
    ══════════════════════════════════════════════════════════════════════ */
 
 let SUPABASE_URL = localStorage.getItem('pec_sb_url') || '';
@@ -19,12 +19,12 @@ const COL_KEYS = {
 };
 
 const estado = {
-  ure:    { dados:[], filtrados:[], filtro:'todos', colOrdem:'score', desc:false, nomeEscola:'' },
-  escola: { dados:[], filtrados:[], filtro:'todos', colOrdem:'score', desc:false, nomeEscola:'' },
-  turma:  { dados:[], filtrados:[], filtro:'todos', colOrdem:'score', desc:false, nomeEscola:'' },
+  ure:    { dados:[], filtrados:[], filtro:'todos', colOrdem:'score', desc:true, nomeEscola:'' },
+  escola: { dados:[], filtrados:[], filtro:'todos', colOrdem:'score', desc:true, nomeEscola:'' },
+  turma:  { dados:[], filtrados:[], filtro:'todos', colOrdem:'score', desc:true, nomeEscola:'' },
 };
 
-// --- PROCESSAMENTO ---
+// --- PROCESSAMENTO DE ARQUIVOS ---
 function processarArquivo(file, nivel) {
   if (!file) return;
   const reader = new FileReader();
@@ -44,13 +44,11 @@ function processarArquivo(file, nivel) {
       });
 
       const cols = {};
-      const baseObj = {};
-      headers.forEach((h, i) => { if (h) baseObj[h] = linhasRaw[0][i]; });
-      for (const k in COL_KEYS) cols[k] = encontrarCol(baseObj, COL_KEYS[k]);
+      const mockObj = {}; headers.forEach((h, i) => { if (h) mockObj[h] = linhasRaw[0][i]; });
+      for (const k in COL_KEYS) cols[k] = encontrarCol(mockObj, COL_KEYS[k]);
 
       estado[nivel].dados = linhasRaw.map(r => {
-        const obj = {};
-        headers.forEach((h, i) => { if (h) obj[h] = r[i]; });
+        const obj = {}; headers.forEach((h, i) => { if (h) obj[h] = r[i]; });
         const s = calcScore(obj, cols);
         return {
           nome: String(obj[cols.escola] || obj[cols.turma] || obj[cols.aluno] || 'Indefinido').trim(),
@@ -64,12 +62,12 @@ function processarArquivo(file, nivel) {
       });
 
       renderizarNivel(nivel);
-    } catch (err) { alert('❌ Erro no arquivo.'); }
+    } catch (err) { alert('❌ Erro no processamento.'); }
   };
   reader.readAsArrayBuffer(file);
 }
 
-// --- INTERFACE (CARDS, FILTROS E CABEÇALHOS) ---
+// --- INTERFACE: CABEÇALHOS, SORT E CARDS ---
 function renderizarNivel(nivel) {
   const st = estado[nivel];
   document.getElementById('results-' + nivel).style.display = 'block';
@@ -79,24 +77,19 @@ function renderizarNivel(nivel) {
   const media = st.dados.filter(r => r.cls === 'media').length;
   const baixa = st.dados.filter(r => r.cls === 'baixa').length;
 
-  document.getElementById('strip-' + nivel).innerHTML = `
-    <div class="score-card ${st.filtro === 'todos' ? 'active-filter' : ''}" onclick="filtrar('${nivel}','todos')">
-      <div class="score-val">${total}</div><div class="score-lbl">Total</div></div>
-    <div class="score-card ${st.filtro === 'alta' ? 'active-filter' : ''}" style="color:var(--red)" onclick="filtrar('${nivel}','alta')">
-      <div class="score-val">${alta}</div><div class="score-lbl">Alta</div></div>
-    <div class="score-card ${st.filtro === 'media' ? 'active-filter' : ''}" style="color:var(--amber)" onclick="filtrar('${nivel}','media')">
-      <div class="score-val">${media}</div><div class="score-lbl">Média</div></div>
-    <div class="score-card ${st.filtro === 'baixa' ? 'active-filter' : ''}" style="color:var(--emerald)" onclick="filtrar('${nivel}','baixa')">
-      <div class="score-val">${baixa}</div><div class="score-lbl">Baixa</div></div>
-  `;
-
-  aplicarFiltroOrdem(nivel);
-}
-
-function ordenarPor(nivel, col) {
-  const st = estado[nivel];
-  if (st.colOrdem === col) st.desc = !st.desc;
-  else { st.colOrdem = col; st.desc = false; }
+  const strip = document.getElementById('strip-' + nivel);
+  if (strip) {
+    strip.innerHTML = `
+      <div class="score-card ${st.filtro === 'todos' ? 'active-filter' : ''}" onclick="filtrar('${nivel}','todos')">
+        <div class="score-val">${total}</div><div class="score-lbl">Total</div></div>
+      <div class="score-card ${st.filtro === 'alta' ? 'active-filter' : ''}" style="color:var(--red)" onclick="filtrar('${nivel}','alta')">
+        <div class="score-val">${alta}</div><div class="score-lbl">Alta</div></div>
+      <div class="score-card ${st.filtro === 'media' ? 'active-filter' : ''}" style="color:var(--amber)" onclick="filtrar('${nivel}','media')">
+        <div class="score-val">${media}</div><div class="score-lbl">Média</div></div>
+      <div class="score-card ${st.filtro === 'baixa' ? 'active-filter' : ''}" style="color:var(--emerald)" onclick="filtrar('${nivel}','baixa')">
+        <div class="score-val">${baixa}</div><div class="score-lbl">Baixa</div></div>
+    `;
+  }
   aplicarFiltroOrdem(nivel);
 }
 
@@ -105,12 +98,20 @@ function filtrar(nivel, cls) {
   renderizarNivel(nivel);
 }
 
+function ordenarPor(nivel, col) {
+  const st = estado[nivel];
+  if (st.colOrdem === col) st.desc = !st.desc;
+  else { st.colOrdem = col; st.desc = true; }
+  aplicarFiltroOrdem(nivel);
+}
+
 function aplicarFiltroOrdem(nivel) {
   const st = estado[nivel];
   st.filtrados = st.filtro === 'todos' ? [...st.dados] : st.dados.filter(r => r.cls === st.filtro);
 
   st.filtrados.sort((a, b) => {
     let va = a[st.colOrdem], vb = b[st.colOrdem];
+    if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
     return st.desc ? (vb > va ? 1 : -1) : (va > vb ? 1 : -1);
   });
 
@@ -120,13 +121,19 @@ function aplicarFiltroOrdem(nivel) {
 
 function renderizarCabecalho(nivel) {
   const st = estado[nivel];
-  const labels = { 
-      rank: '#', 
-      nome: nivel === 'ure' ? 'Escola' : nivel === 'escola' ? 'Turma' : 'Aluno',
-      cls: 'Prioridade', score: 'Score', acessos: 'Acessos', media: 'Média', realizacao: 'Realiz.'
+  const colLabels = {
+    nome: nivel === 'ure' ? 'Escola' : nivel === 'escola' ? 'Turma' : 'Aluno',
+    cls: 'Prioridade',
+    score: 'Score',
+    acessos: 'Acessos',
+    media: 'Média',
+    realizacao: 'Realização'
   };
 
-  document.getElementById('head-' + nivel).innerHTML = Object.entries(labels).map(([key, label]) => `
+  const headRow = document.getElementById('head-' + nivel);
+  if (!headRow) return;
+
+  headRow.innerHTML = `<th>#</th>` + Object.entries(colLabels).map(([key, label]) => `
     <th class="${st.colOrdem === key ? (st.desc ? 'sorted desc' : 'sorted') : ''}" onclick="ordenarPor('${nivel}','${key}')">
       ${label}
     </th>
@@ -135,14 +142,17 @@ function renderizarCabecalho(nivel) {
 
 function renderizarLinhas(nivel) {
   const st = estado[nivel];
-  document.getElementById('body-' + nivel).innerHTML = st.filtrados.map((r, i) => `
+  const tbody = document.getElementById('body-' + nivel);
+  if (!tbody) return;
+
+  tbody.innerHTML = st.filtrados.map((r, i) => `
     <tr>
       <td><span class="row-rank">${i + 1}</span></td>
       <td><div class="row-main">${r.nome}</div></td>
       <td><span class="pri-tag ${r.cls}">${r.label}</span></td>
       <td>
         <div class="gauge-wrap">
-          <div class="gauge-track"><div class="gauge-fill" style="width:${r.score}%; background:${r.score < 40 ? '#c0392b' : r.score < 65 ? '#b7580a' : '#1a7a4a'}"></div></div>
+          <div class="gauge-track"><div class="gauge-fill" style="width:${Math.min(r.score, 100)}%; background:${r.score < 40 ? '#c0392b' : r.score < 65 ? '#b7580a' : '#1a7a4a'}"></div></div>
           <span class="gauge-num">${r.score.toFixed(1)}</span>
         </div>
       </td>
@@ -153,7 +163,7 @@ function renderizarLinhas(nivel) {
   `).join('');
 }
 
-// --- UTILITÁRIOS ---
+// --- UTILITÁRIOS E SUPABASE ---
 function toNum(v){ if(v==null||v==='') return 0; const s = String(v).replace(/[%\s]/g,'').trim(); let n = s.includes(',') ? parseFloat(s.replace(/\./g,'').replace(',','.')) : parseFloat(s); return isNaN(n) ? 0 : (n > 0 && n < 1 ? n * 100 : n); }
 function encontrarCol(obj, kws){ const keys = Object.keys(obj); for(const kw of kws){ const f = keys.find(k => k.toLowerCase().includes(kw.toLowerCase())); if(f) return f; } return null; }
 function calcScore(linha, cols){ let soma=0, tp=0; for(const [c,p] of Object.entries(PESOS)){ if(!cols[c]) continue; let v = toNum(linha[cols[c]]); if(c==='media') v = (v/10)*100; soma += Math.min(v,100)*p; tp += p; } return tp>0 ? soma/tp : 0; }
