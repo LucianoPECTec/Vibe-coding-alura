@@ -1,0 +1,17 @@
+:root {
+  --ink:#0b0f19; --ink2:#1e2535; --ink3:#2e3a50;
+  --rule:#d4d9e4; --rule2:#eaedf3; --paper:#f4f6fa;
+  --white:#ffffff; --prussian:#1a3a5c; --navy:#0f2744;
+  --accent:#1a5fd4; --accent-lt:#e8f0fc;
+  --red:#c0392b; --red-lt:#fdf1f0;
+  --amber:#b7580a; --amber-lt:#fef6ee;
+  --emerald:#1a7a4a; --emerald-lt:#edf7f2;
+  --fd:'Bebas Neue',sans-serif;
+  --fc:'Barlow Condensed',sans-serif;
+  --fb:'Barlow',sans-serif;
+}
+
+/* Copie o restante dos estilos aqui... */
+body { background: var(--paper); color: var(--ink); font-family: var(--fb); }
+.masthead { background: var(--navy); color: #fff; padding: 0 40px; display: flex; align-items: center; height: 68px; position: sticky; top: 0; z-index: 200; gap: 16px; }
+/* ... continue com todo o CSS do seu arquivo v3 */
