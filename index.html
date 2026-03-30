@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PEC - Mapa de Visitas (Rio Preto)</title>
+    <title>PEC Rio Preto - Gestão de Visitas</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
@@ -15,29 +17,29 @@
             <span class="brand-sigla">PEC</span>
             <div class="brand-texts">
                 <span class="brand-title">Tecnologia · Rio Preto</span>
-                <span class="brand-sub">Mapa de Visitas</span>
+                <span class="brand-sub">Dashboard de Gestão</span>
             </div>
         </div>
         <nav class="nav-tabs">
-            <button class="nav-tab active" id="tab-ure" onclick="mudarAba('ure')">URE <span class="tab-badge" id="badge-ure">0</span></button>
-            <button class="nav-tab" id="tab-escola" onclick="mudarAba('escola')">Escola <span class="tab-badge" id="badge-escola">0</span></button>
-            <button class="nav-tab" id="tab-turma" onclick="mudarAba('turma')">Turmas <span class="tab-badge" id="badge-turma">0</span></button>
-            <button class="nav-tab" id="tab-mapa" onclick="mudarAba('mapa')">📍 Mapa</button>
-            <button class="nav-tab" id="tab-comparativo" onclick="mudarAba('comparativo')">Comparativo</button>
+            <button class="nav-tab active" onclick="mudarAba('ure')">URE</button>
+            <button class="nav-tab" onclick="mudarAba('escola')">Escola</button>
+            <button class="nav-tab" onclick="mudarAba('turma')">Turmas</button>
+            <button class="nav-tab" onclick="mudarAba('mapa')">📍 Mapa</button>
+            <button class="nav-tab" onclick="mudarAba('comparativo')">Comparativo</button>
         </nav>
         <div class="sb-status" onclick="abrirModalSupabase()">
             <div id="sb-dot" class="sb-dot"></div>
-            <span id="sb-lbl" class="sb-lbl">Supabase</span>
+            <span id="sb-lbl">Supabase</span>
         </div>
     </header>
 
     <main class="page">
         <section id="panel-ure" class="tab-panel active">
             <div class="upload-hero">
-                <div><h1 class="hero-h1">Nível <em>URE</em></h1><p class="hero-desc">Importe o relatório consolidado da Diretoria.</p></div>
-                <div class="upload-card">📊<br>Relatório URE<input type="file" id="input-ure" accept=".xlsx, .xls, .csv"></div>
+                <div><h1 class="hero-h1">Nível <em>URE</em></h1><p>Relatório consolidado da rede.</p></div>
+                <div class="upload-card">📊<br>Upload Relatório URE<input type="file" id="input-ure" accept=".xlsx, .xls"></div>
             </div>
-            <div id="results-ure" style="display:none">
+            <div id="results-ure" class="results-area" style="display:none">
                 <div id="strip-ure" class="score-strip"></div>
                 <div class="table-outer"><table><thead><tr id="head-ure"></tr></thead><tbody id="body-ure"></tbody></table></div>
             </div>
@@ -46,7 +48,7 @@
         <section id="panel-escola" class="tab-panel">
             <div class="upload-hero">
                 <div><h1 class="hero-h1">Nível <em>Escola</em></h1></div>
-                <div class="upload-card">🏫<br>Relatório Escola<input type="file" id="input-escola" accept=".xlsx, .xls, .csv"></div>
+                <div class="upload-card">🏫<br>Upload Relatório Escola<input type="file" id="input-escola" accept=".xlsx, .xls"></div>
             </div>
             <div id="results-escola" style="display:none">
                 <div id="strip-escola" class="score-strip"></div>
@@ -56,8 +58,8 @@
 
         <section id="panel-turma" class="tab-panel">
             <div class="upload-hero">
-                <div><h1 class="hero-h1">Nível <em>Turmas</em></h1></div>
-                <div class="upload-card">👨‍🎓<br>Relatório Turma<input type="file" id="input-turma" accept=".xlsx, .xls, .csv"></div>
+                <div><h1 class="hero-h1">Raio-X <em>Turma</em></h1></div>
+                <div class="upload-card">👨‍🎓<br>Upload Nível Aluno<input type="file" id="input-turma" accept=".xlsx, .xls"></div>
             </div>
             <div id="results-turma" style="display:none">
                 <div id="strip-turma" class="score-strip"></div>
@@ -66,8 +68,8 @@
         </section>
 
         <section id="panel-mapa" class="tab-panel">
-            <h1 class="hero-h1">Geolocalização <em>Prioritária</em></h1>
-            <div id="map" style="width:100%; height:600px; margin-top:20px; border-radius:15px; border:1px solid #ddd;"></div>
+            <h1 class="hero-h1">Mapa de <em>Calor</em></h1>
+            <div id="map" style="width: 100%; height: 65vh; margin-top: 20px; border-radius: 15px; border: 1px solid #ddd; z-index:1;"></div>
         </section>
 
         <section id="panel-comparativo" class="tab-panel">
@@ -80,17 +82,14 @@
         <div class="modal">
             <div class="modal-head"><h3>CONFIGURAR SUPABASE</h3><button onclick="fecharModal()">×</button></div>
             <div class="modal-body">
-                <input type="text" id="inp-url" class="field-input" placeholder="URL do Projeto">
-                <input type="password" id="inp-key" class="field-input" placeholder="Chave de API">
+                <input type="text" id="inp-url" class="field-input" placeholder="Project URL">
+                <input type="password" id="inp-key" class="field-input" placeholder="Anon Key">
                 <div class="modal-actions">
-                    <button class="btn" onclick="testarConexao()">🔌 TESTAR</button>
-                    <button class="btn btn-accent" onclick="salvarConfig()">💾 SALVAR</button>
+                    <button class="btn btn-accent" onclick="salvarConfig()">CONECTAR</button>
                 </div>
             </div>
         </div>
     </div>
-
-    <script src="https://maps.googleapis.com/maps/api/js?key=SUA_CHAVE_AQUI&callback=initMap" async defer></script>
     <script src="script.js"></script>
 </body>
 </html>
