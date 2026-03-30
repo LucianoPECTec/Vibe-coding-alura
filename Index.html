@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PEC · Mapa de Visitas — São José do Rio Preto</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-brand">
+    <div class="brand-texts">
+      <div class="brand-sigla">PEC</div>
+      <div class="brand-title">Tecnologia · São José do Rio Preto</div>
+      <div class="brand-sub">Mapa de Visitas</div>
+    </div>
+  </div>
+
+  <nav class="nav-tabs">
+    <button class="nav-tab active" onclick="mudarAba('ure')" id="tab-ure">
+      🏛 <span class="tab-label">URE</span>
+      <span class="tab-badge" id="badge-ure">—</span>
+    </button>
+    <button class="nav-tab" onclick="mudarAba('escola')" id="tab-escola">
+      🏫 <span class="tab-label">Escola</span>
+      <span class="tab-badge" id="badge-escola">—</span>
+    </button>
+    <button class="nav-tab" onclick="mudarAba('turma')" id="tab-turma">
+      📋 <span class="tab-label">Turmas</span>
+      <span class="tab-badge" id="badge-turma">—</span>
+    </button>
+    <button class="nav-tab" onclick="mudarAba('comparativo')" id="tab-comparativo">
+      📊 <span class="tab-label">Comparativo</span>
+    </button>
+  </nav>
+
+  <div class="mode-badge" id="mode-badge"><span id="mode-badge-text"></span></div>
+
+  <div class="sb-status" id="sb-status-btn" onclick="abrirModalSupabase()" title="Configurar Supabase">
+    <div class="sb-dot" id="sb-dot"></div>
+    <span class="sb-lbl" id="sb-lbl">Supabase</span>
+  </div>
+</header>
+
+<main class="page">
+  <div class="tab-panel active" id="panel-ure">
+    <div class="upload-hero">
+      <div>
+        <h1 class="hero-h1">NÍVEL <em>URE</em></h1>
+        <p class="hero-desc">Relatório com <strong>múltiplas escolas</strong> da Unidade Regional.</p>
+      </div>
+      <div class="upload-card" id="zone-ure">
+        <input type="file" id="input-ure" accept=".xlsx,.xls,.csv">
+        <span class="upload-icon">🏛</span>
+        <div class="upload-title">Relatório URE</div>
+        <div class="upload-sub">Clique ou arraste · .xlsx / .xls / .csv</div>
+        <div class="upload-loaded" id="loaded-ure" style="display:none"></div>
+      </div>
+    </div>
+    <div id="results-ure" style="display:none">
+      <div class="score-strip" id="strip-ure"></div>
+      <div class="toolbar">
+        <div class="toolbar-title" id="title-ure">URE — ESCOLAS</div>
+        <div class="periodo-wrap" id="pw-ure">
+          <button class="btn periodo-btn" id="pbtn-ure" onclick="togglePeriodo('ure')">
+            <span id="ptext-ure">Selecionar período</span>
+            <span class="arrow">▾</span>
+          </button>
+          <div class="periodo-dropdown" id="pdrop-ure"></div>
+        </div>
+        <button class="btn" onclick="exportarExcel('ure')">📊 Exportar</button>
+        <button class="btn btn-accent" id="btn-salvar-ure" onclick="salvarSupabase('ure')">☁️ Salvar</button>
+      </div>
+      <div class="table-outer">
+        <table><thead><tr id="head-ure"></tr></thead><tbody id="body-ure"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="panel-escola">
+    <div class="upload-hero">
+      <div><h1 class="hero-h1">NÍVEL <em>ESCOLA</em></h1></div>
+      <div class="upload-card" id="zone-escola">
+        <input type="file" id="input-escola" accept=".xlsx,.xls,.csv">
+        <span class="upload-icon">🏫</span>
+        <div class="upload-title">Relatório Escola</div>
+        <div class="upload-loaded" id="loaded-escola" style="display:none"></div>
+      </div>
+    </div>
+    <div id="results-escola" style="display:none">
+      <div class="breadcrumb" id="bc-escola"></div>
+      <div class="score-strip" id="strip-escola"></div>
+      <div class="table-outer">
+        <table><thead><tr id="head-escola"></tr></thead><tbody id="body-escola"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="panel-turma">
+    <div class="upload-hero">
+      <div><h1 class="hero-h1">NÍVEL <em>TURMAS</em></h1></div>
+      <div class="upload-card" id="zone-turma">
+        <input type="file" id="input-turma" accept=".xlsx,.xls,.csv">
+        <span class="upload-icon">📋</span>
+        <div class="upload-title">Relatório de Turma</div>
+        <div class="upload-loaded" id="loaded-turma" style="display:none"></div>
+      </div>
+    </div>
+    <div id="results-turma" style="display:none">
+      <div class="breadcrumb" id="bc-turma"></div>
+      <div class="table-outer">
+        <table><thead><tr id="head-turma"></tr></thead><tbody id="body-turma"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="panel-comparativo">
+    <div class="charts-header">
+      <h2>COMPARATIVO</h2>
+      <p>Dados históricos salvos no Supabase.</p>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card full"><canvas id="chart-ranking"></canvas></div>
+      <div class="chart-card"><canvas id="chart-donut"></canvas></div>
+      <div class="chart-card"><canvas id="chart-evolucao"></canvas></div>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<div class="modal-overlay" id="modal-sb" onclick="fecharModalSeOverlay(event)">
+  <div class="modal">
+    <div class="modal-head"><h3>CONFIGURAR SUPABASE</h3><button class="modal-close" onclick="fecharModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="sb-status-row"><div class="sb-dot" id="modal-dot"></div><span id="modal-status-msg">Não configurado</span></div>
+      <div class="field-group">
+        <label class="field-label">Project URL</label>
+        <input class="field-input" id="inp-url" type="text" placeholder="https://xxxxxxxx.supabase.co">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Anon Public Key</label>
+        <input class="field-input" id="inp-key" type="password" placeholder="eyJhbGci...">
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="testarConexao()">🔌 Testar</button>
+        <button class="btn btn-accent" onclick="salvarConfig()">💾 Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
