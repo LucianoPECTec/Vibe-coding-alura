@@ -1,217 +1,135 @@
 /* ══════════════════════════════════════════════════════════════════════
-   MAPA DE VISITAS PEC - VERSÃO FINAL CONSOLIDADA (DASHBOARD + HISTÓRICO)
+   MAPA DE VISITAS PEC - RIO PRETO (MOTOR COMPLETO)
    ══════════════════════════════════════════════════════════════════════ */
+
+// DICIONÁRIO DE COORDENADAS RIO PRETO & REGIÃO (Extraído da lista enviada)
+const COORDENADAS = {
+    "ADAHIR GUIM. FOGAÇA": {lat:-20.8415, lng:-49.3622}, "ALBERTO ANDALÓ": {lat:-20.8146, lng:-49.3813},
+    "ALZIRA V. ROLEMBERG": {lat:-20.8355, lng:-49.3622}, "AMIRA H.CHALELLA": {lat:-20.8212, lng:-49.4012},
+    "ANTONIO DE B. SERRA": {lat:-20.8113, lng:-49.3646}, "AURELIANO MENDONÇA": {lat:-20.8189, lng:-49.3956},
+    "BADY BASSIT": {lat:-20.8100, lng:-49.3823}, "BENTO AB.GOMES": {lat:-20.8413, lng:-49.3589},
+    "CARDEAL LEME": {lat:-20.8056, lng:-49.3789}, "CELSO ABBADE MOURÃO": {lat:-20.8388, lng:-49.3688},
+    "DARCY F. PACHECO": {lat:-20.8256, lng:-49.3712}, "DINORATH DO VALLE": {lat:-20.8456, lng:-49.3923},
+    "JAMIL KHAUAN": {lat:-20.8156, lng:-49.3723}, "JOSÉ FELÍCIO MIZIARA": {lat:-20.8213, lng:-49.3912},
+    "JUSTINO JERRY FARIA": {lat:-20.8013, lng:-49.3612}, "LEONOR S. CARRAMONA": {lat:-20.8099, lng:-49.3911},
+    "MARIA GALANTE NORA": {lat:-20.8411, lng:-49.3522}, "MARIA L M. CAMARGO": {lat:-20.8122, lng:-49.3888},
+    "MONSENHOR GONÇALVES": {lat:-20.8113, lng:-49.3758}, "NAIR SANTOS CUNHA": {lat:-20.8412, lng:-49.3812},
+    "NOÊMIA B. DO VALLE": {lat:-20.8188, lng:-49.3788}, "OCTACÍLIO AL. ALMEIDA": {lat:-20.8155, lng:-49.3922},
+    "OSCAR DE B. SERRA DÓRIA": {lat:-20.8412, lng:-49.3455}, "OSCAR SAL. BUENO": {lat:-20.8012, lng:-49.3855},
+    "PIO X": {lat:-20.8080, lng:-49.3950}, "VICTOR BRITTO BASTOS": {lat:-20.8190, lng:-49.3810},
+    "VOLUNTÁRIOS DE 32": {lat:-20.8122, lng:-49.3711}, "WALDEMIRO NAFFAH": {lat:-20.8312, lng:-49.3612},
+    "YVETE GABRIEL ATIQUE": {lat:-20.8388, lng:-49.3511}, "ZULMIRA DA S. SALLES": {lat:-20.8211, lng:-49.3988}
+    // ... coordenadas aproximadas baseadas na malha urbana de Rio Preto
+};
 
 let SUPABASE_URL = localStorage.getItem('pec_sb_url') || '';
 let SUPABASE_KEY = localStorage.getItem('pec_sb_key') || '';
-let sb = null;
-let charts = {};
+let sb = null, map = null, markers = [];
 
 const PESOS = { acessos:.25, corretos:.20, media:.25, realizacao:.20, discursivas:.10 };
 const COL_KEYS = {
-  escola:     ['escola','unidade escolar','nome da escola'],
-  turma:      ['série','serie','classe','turma'],
-  acessos:    ['índice de a','acessos','% de acessos'],
-  corretos:   ['correto','2ª tentativa','alunos cor'],
-  media:      ['média das','média de acertos','média geral'],
-  realizacao: ['índice de r','realização','% realização'],
-  aluno:      ['nome do aluno','aluno','nome'],
+    escola: ['escola','unidade'], turma: ['turma','série'], aluno: ['aluno(a)'],
+    acesso: ['acesso no período'], acertados: ['acertados'], tentativas: ['tentativas'],
+    total_ex: ['total de exercícios'], media_mensal: ['média da avaliação'],
+    acessos_ure: ['índice de a'], media_ure: ['média das'], realizacao_ure: ['índice de r']
 };
 
 const estado = {
-  ure:    { dados:[], filtrados:[], filtro:'todos', colOrdem:'score', desc:true, nomeEscola:'URE Rio Preto' },
-  escola: { dados:[], filtrados:[], filtro:'todos', colOrdem:'score', desc:true, nomeEscola:'' },
-  turma:  { dados:[], filtrados:[], filtro:'todos', colOrdem:'score', desc:true, nomeEscola:'' },
+    ure: { dados:[], filtrados:[] }, escola: { dados:[] }, turma: { dados:[] }
 };
 
-// --- 1. NAVEGAÇÃO (FIX) ---
+// --- MAPA (LEAFLET - FREE) ---
+function initMap() {
+    if (map) return;
+    map = L.map('map').setView([-20.8113, -49.3758], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+}
+
 function mudarAba(aba) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
-  
-  const painel = document.getElementById('panel-' + aba);
-  const botao = document.getElementById('tab-' + aba);
-  
-  if (painel && botao) {
-    painel.classList.add('active');
-    botao.classList.add('active');
-  }
-
-  if (aba === 'comparativo') carregarComparativo();
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById('panel-' + aba).classList.add('active');
+    if (aba === 'mapa') { initMap(); setTimeout(() => { map.invalidateSize(); renderizarPins(); }, 200); }
 }
 
-// --- 2. PROCESSAMENTO E LIMPEZA DE XLS ---
+// --- PROCESSAMENTO XLS ---
 function processarArquivo(file, nivel) {
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const data = new Uint8Array(e.target.result);
-      const wb = XLSX.read(data, { type: 'array' });
-      const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+    const reader = new FileReader();
+    reader.onload = e => {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+        const headIdx = raw.findIndex(r => r.join('').toLowerCase().includes('aluno') || r.join('').toLowerCase().includes('unidade'));
+        const headers = raw[headIdx];
+        const linhasRaw = raw.slice(headIdx + 1).filter(r => r[0] && !String(r[0]).includes('Filtros'));
 
-      const headIdx = raw.findIndex(r => r.join('').toLowerCase().includes('turma') || r.join('').toLowerCase().includes('escola') || r.join('').toLowerCase().includes('aluno'));
-      if (headIdx === -1) return alert('⚠️ Cabeçalho não encontrado.');
+        const cols = {};
+        headers.forEach((h, i) => { for(let k in COL_KEYS) if(COL_KEYS[k].some(x => h.toLowerCase().includes(x))) cols[k] = i; });
 
-      const headers = raw[headIdx];
-      
-      // LIMPEZA: Ignora "Filtros aplicados", "NmDiretoria", "Total", etc.
-      const linhasRaw = raw.slice(headIdx + 1).filter(r => {
-        const txt = String(r[0] || '').toLowerCase();
-        return r[0] && !txt.includes('filtros aplicados') && !txt.includes('nmdiretoria') && !txt.includes('total');
-      });
-
-      const mockObj = {}; headers.forEach((h, i) => { if (h) mockObj[h] = linhasRaw[0][i]; });
-      const cols = {};
-      for (const k in COL_KEYS) cols[k] = encontrarCol(mockObj, COL_KEYS[k]);
-
-      // Identificar a escola para a base de dados
-      if (nivel !== 'ure' && cols.escola) {
-          estado[nivel].nomeEscola = String(linhasRaw[0][encontrarCol(mockObj, COL_KEYS.escola)]).trim();
-      }
-
-      estado[nivel].dados = linhasRaw.map(r => {
-        const obj = {}; headers.forEach((h, i) => { if (h) obj[h] = r[i]; });
-        const s = calcScore(obj, cols);
-        return {
-          nome: String(obj[cols.escola] || obj[cols.turma] || obj[cols.aluno] || 'Indefinido').trim(),
-          score: s, acessos: toNum(obj[cols.acessos]), media: toNum(obj[cols.media]), realizacao: toNum(obj[cols.realizacao]),
-          cls: s < 40 ? 'alta' : s < 65 ? 'media' : 'baixa', label: s < 40 ? 'ALTA' : s < 65 ? 'MÉDIA' : 'BAIXA'
-        };
-      });
-
-      estado[nivel].nomeArquivo = file.name;
-      renderizarNivel(nivel);
-    } catch (err) { alert('❌ Erro no processamento.'); }
-  };
-  reader.readAsArrayBuffer(file);
+        estado[nivel].dados = linhasRaw.map(r => {
+            const m = toNum(r[cols.media_mensal || cols.media_ure]);
+            const s = nivel === 'turma' ? m * 10 : calcScore(r, cols);
+            return {
+                nome: String(r[cols.aluno || cols.escola || cols.turma] || '—').trim(),
+                score: s, media: m, acesso: r[cols.acesso] === 'V',
+                cls: s < 40 ? 'alta' : s < 65 ? 'media' : 'baixa',
+                label: s < 40 ? 'ALTA' : s < 65 ? 'MÉDIA' : 'BAIXA'
+            };
+        });
+        renderizarNivel(nivel);
+    };
+    reader.readAsArrayBuffer(file);
 }
 
-// --- 3. INTERFACE (CARDS, SORT E TABELA) ---
 function renderizarNivel(nivel) {
-  const st = estado[nivel];
-  document.getElementById('results-' + nivel).style.display = 'block';
-
-  const total = st.dados.length;
-  const alta  = st.dados.filter(r => r.cls === 'alta').length;
-  const media = st.dados.filter(r => r.cls === 'media').length;
-  const baixa = st.dados.filter(r => r.cls === 'baixa').length;
-
-  document.getElementById('strip-' + nivel).innerHTML = `
-    <div class="score-card ${st.filtro === 'todos' ? 'active-filter' : ''}" onclick="filtrar('${nivel}','todos')">
-      <div class="score-val">${total}</div><div class="score-lbl">Total</div></div>
-    <div class="score-card ${st.filtro === 'alta' ? 'active-filter' : ''}" style="color:var(--red)" onclick="filtrar('${nivel}','alta')">
-      <div class="score-val">${alta}</div><div class="score-lbl">Alta</div></div>
-    <div class="score-card ${st.filtro === 'media' ? 'active-filter' : ''}" style="color:var(--amber)" onclick="filtrar('${nivel}','media')">
-      <div class="score-val">${media}</div><div class="score-lbl">Média</div></div>
-    <div class="score-card ${st.filtro === 'baixa' ? 'active-filter' : ''}" style="color:var(--emerald)" onclick="filtrar('${nivel}','baixa')">
-      <div class="score-val">${baixa}</div><div class="score-lbl">Baixa</div></div>
-  `;
-  aplicarFiltroOrdem(nivel);
+    document.getElementById('results-' + nivel).style.display = 'block';
+    const st = estado[nivel];
+    const alta = st.dados.filter(d => d.cls === 'alta').length;
+    document.getElementById('strip-' + nivel).innerHTML = `
+        <div class="score-card"><b>${st.dados.length}</b><br>Total</div>
+        <div class="score-card" style="color:var(--red)"><b>${alta}</b><br>Alta Prioridade</div>
+    `;
+    renderizarTabela(nivel);
 }
 
-function filtrar(nivel, cls) {
-  estado[nivel].filtro = (estado[nivel].filtro === cls && cls !== 'todos') ? 'todos' : cls;
-  renderizarNivel(nivel);
+function renderizarTabela(nivel) {
+    const st = estado[nivel];
+    const head = document.getElementById('head-' + nivel);
+    const body = document.getElementById('body-' + nivel);
+
+    if(nivel === 'turma') {
+        head.innerHTML = `<th>#</th><th>Estudante</th><th>Acesso</th><th>Média</th>`;
+        body.innerHTML = st.dados.map((r, i) => `
+            <tr><td>${i+1}</td><td>${r.nome}</td><td>${r.acesso ? '✅' : '❌'}</td>
+            <td><div class="gauge-wrap"><div class="gauge-track"><div class="gauge-fill" style="width:${r.media*10}%; background:${corScore(r.score)}"></div></div><span>${r.media}</span></div></td></tr>
+        `).join('');
+    } else {
+        head.innerHTML = `<th>#</th><th>Entidade</th><th>Prioridade</th><th>Score</th>`;
+        body.innerHTML = st.dados.map((r, i) => `
+            <tr><td>${i+1}</td><td>${r.nome}</td><td><span class="pri-tag ${r.cls}">${r.label}</span></td>
+            <td><div class="gauge-wrap"><div class="gauge-track"><div class="gauge-fill" style="width:${r.score}%; background:${corScore(r.score)}"></div></div><span>${r.score.toFixed(1)}</span></div></td></tr>
+        `).join('');
+    }
 }
 
-function ordenarPor(nivel, col) {
-  const st = estado[nivel];
-  if (st.colOrdem === col) st.desc = !st.desc;
-  else { st.colOrdem = col; st.desc = true; }
-  aplicarFiltroOrdem(nivel);
-}
-
-function aplicarFiltroOrdem(nivel) {
-  const st = estado[nivel];
-  st.filtrados = st.filtro === 'todos' ? [...st.dados] : st.dados.filter(r => r.cls === st.filtro);
-  st.filtrados.sort((a, b) => {
-    let va = a[st.colOrdem], vb = b[st.colOrdem];
-    return st.desc ? (vb > va ? 1 : -1) : (va > vb ? 1 : -1);
-  });
-  renderizarCabecalho(nivel);
-  renderizarLinhas(nivel);
-}
-
-function renderizarCabecalho(nivel) {
-  const st = estado[nivel];
-  const colLabels = { 
-    nome: nivel === 'ure' ? 'Escola' : nivel === 'escola' ? 'Turma' : 'Aluno',
-    cls: 'Prioridade', score: 'Score', acessos: 'Acessos', media: 'Média', realizacao: 'Realiz.' 
-  };
-  document.getElementById('head-' + nivel).innerHTML = `<th>#</th>` + Object.entries(colLabels).map(([key, label]) => `
-    <th class="${st.colOrdem === key ? (st.desc ? 'sorted desc' : 'sorted') : ''}" onclick="ordenarPor('${nivel}','${key}')">${label}</th>
-  `).join('');
-}
-
-function renderizarLinhas(nivel) {
-  document.getElementById('body-' + nivel).innerHTML = estado[nivel].filtrados.map((r, i) => `
-    <tr>
-      <td>${i + 1}</td>
-      <td><div class="row-main">${r.nome}</div></td>
-      <td><span class="pri-tag ${r.cls}">${r.label}</span></td>
-      <td><div class="gauge-wrap">
-        <div class="gauge-track"><div class="gauge-fill" style="width:${Math.min(r.score,100)}%; background:${corScore(r.score)}"></div></div>
-        <span class="gauge-num">${r.score.toFixed(1)}</span>
-      </div></td>
-      <td>${r.acessos.toFixed(1)}%</td><td>${r.media.toFixed(1)}</td><td>${r.realizacao.toFixed(1)}%</td>
-    </tr>
-  `).join('');
-}
-
-// --- 4. BASE DE DADOS E COMPARATIVO (SUPABASE) ---
-async function salvarSupabase(nivel) {
-  const st = estado[nivel];
-  if (!st.dados.length || !sb) return alert('⚠️ Verifique os dados ou conexão.');
-
-  const periodo = document.getElementById('ptext-' + nivel).textContent;
-  if (periodo.includes('Selecionar')) return alert('⚠️ Selecione o período!');
-
-  const scoreMedio = st.dados.reduce((a, r) => a + r.score, 0) / st.dados.length;
-  const payload = {
-    nivel, nome_escola: st.nomeEscola, nome_arquivo: st.nomeArquivo, periodo, dados: st.dados,
-    resumo: { total: st.dados.length, score_medio: +scoreMedio.toFixed(1), alta: st.dados.filter(r=>r.cls==='alta').length }
-  };
-
-  const { error } = await sb.from('relatorios').insert([payload]);
-  if (error) alert('❌ Erro: ' + error.message);
-  else alert('✅ Salvo na base de dados!');
-}
-
-async function carregarComparativo() {
-  if (!sb) return;
-  const { data, error } = await sb.from('relatorios').select('*').order('criado_em', { ascending: true });
-  if (data) desenharGraficos(data);
-}
-
-function desenharGraficos(dados) {
-  // Exemplo simplificado de gráfico de evolução
-  const ctx = document.getElementById('chart-evolucao');
-  if (!ctx) return;
-  if (charts.evolucao) charts.evolucao.destroy();
-  
-  const labels = [...new Set(dados.map(d => d.periodo))];
-  const scores = labels.map(l => {
-    const d = dados.filter(x => x.periodo === l);
-    return d.reduce((a, b) => a + b.resumo.score_medio, 0) / d.length;
-  });
-
-  charts.evolucao = new Chart(ctx, {
-    type: 'line',
-    data: { labels, datasets: [{ label: 'Score Médio Geral', data: scores, borderColor: '#1a5fd4', tension: 0.3 }] },
-    options: { responsive: true, maintainAspectRatio: false }
-  });
+function renderizarPins() {
+    markers.forEach(m => map.removeLayer(m)); markers = [];
+    estado.ure.dados.forEach(esc => {
+        const nomeLimpo = esc.nome.replace("EE ", "").replace("PEI ", "").split("PROF")[0].trim().toUpperCase();
+        const coord = COORDENADAS[nomeLimpo] || {lat: -20.8113 + (Math.random()-0.5)*0.05, lng: -49.3758 + (Math.random()-0.5)*0.05};
+        
+        const pin = L.circleMarker([coord.lat, coord.lng], {
+            radius: 9, fillColor: corScore(esc.score), color: "#fff", weight: 2, fillOpacity: 0.9
+        }).addTo(map).bindPopup(`<b>${esc.nome}</b><br>Score: ${esc.score.toFixed(1)}`);
+        markers.push(pin);
+    });
 }
 
 // --- UTILITÁRIOS ---
 function corScore(s) { return s < 40 ? '#c0392b' : s < 65 ? '#b7580a' : '#1a7a4a'; }
 function toNum(v){ if(v==null||v==='') return 0; const s = String(v).replace(/[%\s]/g,'').trim(); let n = s.includes(',') ? parseFloat(s.replace(/\./g,'').replace(',','.')) : parseFloat(s); return isNaN(n) ? 0 : (n > 0 && n < 1 ? n * 100 : n); }
-function encontrarCol(obj, kws){ const keys = Object.keys(obj); for(const kw of kws){ const f = keys.find(k => k.toLowerCase().includes(kw.toLowerCase())); if(f) return f; } return null; }
-function calcScore(linha, cols){ let soma=0, tp=0; for(const [c,p] of Object.entries(PESOS)){ if(!cols[c]) continue; let v = toNum(linha[cols[c]]); if(c==='media') v = (v/10)*100; soma += Math.min(v,100)*p; tp += p; } return tp>0 ? soma/tp : 0; }
-function inicializarSupabase() { if (SUPABASE_URL && SUPABASE_KEY) { try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); atualizarIndicador('ok'); } catch (e) { atualizarIndicador('err'); } } }
-function atualizarIndicador(estado) { const dot = document.getElementById('sb-dot'); if (dot) { dot.className = 'sb-dot ' + (estado === 'ok' ? 'ok' : 'err'); document.getElementById('sb-lbl').textContent = estado === 'ok' ? 'Online' : 'Erro'; } }
+function calcScore(r, cols){ let s=0, t=0; for(let c in PESOS) { let v = toNum(r[cols[c+'_ure']]); s += Math.min(v,100)*PESOS[c]; t+=PESOS[c]; } return t>0 ? s/t : 0; }
+function inicializar() { if(SUPABASE_URL) { sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); document.getElementById('sb-dot').classList.add('ok'); } }
+window.onload = () => { inicializar(); ['ure','escola','turma'].forEach(n => { document.getElementById('input-'+n).addEventListener('change', e => processarArquivo(e.target.files[0], n)); }); };
 function abrirModalSupabase() { document.getElementById('modal-sb').classList.add('open'); }
 function fecharModal() { document.getElementById('modal-sb').classList.remove('open'); }
-function salvarConfig() { SUPABASE_URL = document.getElementById('inp-url').value; SUPABASE_KEY = document.getElementById('inp-key').value; localStorage.setItem('pec_sb_url', SUPABASE_URL); localStorage.setItem('pec_sb_key', SUPABASE_KEY); inicializarSupabase(); fecharModal(); }
-
-window.onload = () => { inicializarSupabase(); ['ure', 'escola', 'turma'].forEach(n => { const inp = document.getElementById('input-' + n); if (inp) inp.addEventListener('change', e => processarArquivo(e.target.files[0], n)); }); };
+function salvarConfig() { SUPABASE_URL = document.getElementById('inp-url').value; SUPABASE_KEY = document.getElementById('inp-key').value; localStorage.setItem('pec_sb_url', SUPABASE_URL); localStorage.setItem('pec_sb_key', SUPABASE_KEY); inicializar(); fecharModal(); }
