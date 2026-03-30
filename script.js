@@ -92,3 +92,30 @@ function fecharModalSeOverlay(e) {
 window.onload = () => {
   inicializarSupabase();
 };
+
+async function testarConexao() {
+  const url = document.getElementById('inp-url').value.trim();
+  const key = document.getElementById('inp-key').value.trim();
+  
+  if (!url || !key) {
+    alert('⚠️ Preencha os campos antes de testar!');
+    return;
+  }
+
+  const msgStatus = document.getElementById('modal-status-msg');
+  if (msgStatus) msgStatus.textContent = 'Testando conexão...';
+
+  try {
+    // Tenta criar um cliente temporário e fazer uma consulta simples
+    const clienteTeste = window.supabase.createClient(url, key);
+    const { error } = await clienteTeste.from('relatorios').select('id').limit(1);
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    
+    if (msgStatus) msgStatus.textContent = '✅ Conexão OK! Tabela encontrada.';
+    atualizarIndicador('ok', 'Online');
+  } catch (e) {
+    if (msgStatus) msgStatus.textContent = '❌ Erro: ' + (e.message || 'Verifique a tabela');
+    atualizarIndicador('err', 'Erro');
+  }
+}
