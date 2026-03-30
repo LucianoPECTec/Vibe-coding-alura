@@ -14,4 +14,4 @@
 /* Copie o restante dos estilos aqui... */
 body { background: var(--paper); color: var(--ink); font-family: var(--fb); }
 .masthead { background: var(--navy); color: #fff; padding: 0 40px; display: flex; align-items: center; height: 68px; position: sticky; top: 0; z-index: 200; gap: 16px; }
-/* ... continue com todo o CSS do seu arquivo v3 */
+/* ... continue com todo o CSS do seu arquivo v3  ou não*/
