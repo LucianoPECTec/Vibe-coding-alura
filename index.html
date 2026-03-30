@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PEC Rio Preto - Gestão de Visitas</title>
+    <title>PEC Rio Preto - Dashboard Estratégico</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -17,15 +17,15 @@
             <span class="brand-sigla">PEC</span>
             <div class="brand-texts">
                 <span class="brand-title">Tecnologia · Rio Preto</span>
-                <span class="brand-sub">Dashboard de Gestão</span>
+                <span class="brand-sub">Análise Evolutiva</span>
             </div>
         </div>
         <nav class="nav-tabs">
-            <button class="nav-tab active" onclick="mudarAba('ure')">URE</button>
-            <button class="nav-tab" onclick="mudarAba('escola')">Escola</button>
-            <button class="nav-tab" onclick="mudarAba('turma')">Turmas</button>
-            <button class="nav-tab" onclick="mudarAba('mapa')">📍 Mapa</button>
-            <button class="nav-tab" onclick="mudarAba('comparativo')">Comparativo</button>
+            <button class="nav-tab active" id="tab-ure" onclick="mudarAba('ure')">URE</button>
+            <button class="nav-tab" id="tab-escola" onclick="mudarAba('escola')">Escola</button>
+            <button class="nav-tab" id="tab-turma" onclick="mudarAba('turma')">Turmas</button>
+            <button class="nav-tab" id="tab-mapa" onclick="mudarAba('mapa')">📍 Mapa</button>
+            <button class="nav-tab" id="tab-comparativo" onclick="mudarAba('comparativo')">📉 Evolução</button>
         </nav>
         <div class="sb-status" onclick="abrirModalSupabase()">
             <div id="sb-dot" class="sb-dot"></div>
@@ -36,11 +36,14 @@
     <main class="page">
         <section id="panel-ure" class="tab-panel active">
             <div class="upload-hero">
-                <div><h1 class="hero-h1">Nível <em>URE</em></h1><p>Relatório consolidado da rede.</p></div>
+                <div><h1 class="hero-h1">Nível <em>URE</em></h1><p>Relatório consolidado da Diretoria.</p></div>
                 <div class="upload-card">📊<br>Upload Relatório URE<input type="file" id="input-ure" accept=".xlsx, .xls"></div>
             </div>
             <div id="results-ure" class="results-area" style="display:none">
-                <div id="strip-ure" class="score-strip"></div>
+                <div class="toolbar-top">
+                   <div id="strip-ure" class="score-strip"></div>
+                   <button class="btn btn-accent" onclick="salvarSupabase('ure')">☁️ Salvar Histórico URE</button>
+                </div>
                 <div class="table-outer"><table><thead><tr id="head-ure"></tr></thead><tbody id="body-ure"></tbody></table></div>
             </div>
         </section>
@@ -51,7 +54,10 @@
                 <div class="upload-card">🏫<br>Upload Relatório Escola<input type="file" id="input-escola" accept=".xlsx, .xls"></div>
             </div>
             <div id="results-escola" style="display:none">
-                <div id="strip-escola" class="score-strip"></div>
+                <div class="toolbar-top">
+                    <div id="strip-escola" class="score-strip"></div>
+                    <button class="btn btn-accent" onclick="salvarSupabase('escola')">☁️ Salvar Histórico Escola</button>
+                </div>
                 <div class="table-outer"><table><thead><tr id="head-escola"></tr></thead><tbody id="body-escola"></tbody></table></div>
             </div>
         </section>
@@ -62,19 +68,30 @@
                 <div class="upload-card">👨‍🎓<br>Upload Nível Aluno<input type="file" id="input-turma" accept=".xlsx, .xls"></div>
             </div>
             <div id="results-turma" style="display:none">
-                <div id="strip-turma" class="score-strip"></div>
+                <div class="toolbar-top">
+                    <div id="strip-turma" class="score-strip"></div>
+                    <button class="btn btn-accent" onclick="salvarSupabase('turma')">☁️ Salvar Histórico Turma</button>
+                </div>
                 <div class="table-outer"><table><thead><tr id="head-turma"></tr></thead><tbody id="body-turma"></tbody></table></div>
             </div>
         </section>
 
         <section id="panel-mapa" class="tab-panel">
-            <h1 class="hero-h1">Mapa de <em>Calor</em></h1>
+            <h1 class="hero-h1">Mapa de <em>Prioridades</em></h1>
             <div id="map" style="width: 100%; height: 65vh; margin-top: 20px; border-radius: 15px; border: 1px solid #ddd; z-index:1;"></div>
         </section>
 
         <section id="panel-comparativo" class="tab-panel">
-            <h1 class="hero-h1">Evolução <em>Histórica</em></h1>
-            <div class="charts-grid"><div class="chart-card full"><canvas id="chart-evolucao"></canvas></div></div>
+            <div class="evo-header">
+                <h1 class="hero-h1">Evolução <em>Histórica</em></h1>
+                <div class="filters-row">
+                    <select id="filtro-escola-hist" class="field-input" onchange="atualizarGraficoFiltro()"><option value="todos">Todas as Escolas</option></select>
+                    <select id="filtro-turma-hist" class="field-input" onchange="atualizarGraficoFiltro()"><option value="todos">Todas as Turmas</option></select>
+                </div>
+            </div>
+            <div class="charts-grid">
+                <div class="chart-card full"><canvas id="chart-evolucao"></canvas></div>
+            </div>
         </section>
     </main>
 
@@ -84,9 +101,7 @@
             <div class="modal-body">
                 <input type="text" id="inp-url" class="field-input" placeholder="Project URL">
                 <input type="password" id="inp-key" class="field-input" placeholder="Anon Key">
-                <div class="modal-actions">
-                    <button class="btn btn-accent" onclick="salvarConfig()">CONECTAR</button>
-                </div>
+                <div class="modal-actions"><button class="btn btn-accent" onclick="salvarConfig()">CONECTAR</button></div>
             </div>
         </div>
     </div>
